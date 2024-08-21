@@ -1,50 +1,23 @@
-image: nmichalov/veracode-tools
-
 stages:
-    - build
-    - devops-security
-    # - policy-scan
+  - build
+  - package
 
-package:
-    stage: build
-    script:
-        - mvn package
-    artifacts:
-        paths:
-            - target/verademo.war
-    
-# policy-scan:
-#     stage: policy-scan
-#     only:
-#         - schedules
-#         - master
-#     script:
-#         - java -jar /veracode/veracode-wrapper.jar -vid ${API_ID} -vkey ${API_KEY}
-#           -action uploadandscan -appname "${PROJECT_NAME}" -autoscan true -createprofile false
-#           -version "job ${CI_JOB_ID} in pipeline ${CI_PIPELINE_ID}" -filepath target/verademo.war
+Build App:
+  image: mcr.microsoft.com/dotnet/sdk:5.0
+  stage: build
+  script:
+    - dotnet publish -c Debug -o out
+  artifacts:
+    paths:
+      - out/
 
-sca-scan:
-    stage: devops-security
-    allow_failure: true
-    only:
-        - schedules
-        - master
-    script:
-        - curl -sSL https://download.sourceclear.com/ci.sh | sh
-        
-pipeline-scan:   
-    stage: devops-security
-    allow_failure: true
-    only:
-       - schedules
-       - master
-    script:
-       - curl -O https://downloads.veracode.com/securityscan/pipeline-scan-LATEST.zip
-       - unzip -o pipeline-scan-LATEST.zip pipeline-scan.jar
-       - java -jar pipeline-scan.jar 
-              --veracode_api_id ${API_ID} 
-              --veracode_api_key ${API_KEY} 
-              --project_name ${PROJECT_NAME} 
-              --file target/verademo.war
-              --fail_on_severity="Very High, High"
-              --json_output_file="baseline.json" 
+Package for Veracode:
+  image: ubuntu:latest
+  stage: package
+  script:
+    - apt-get update && apt-get install -y curl
+    - curl -fsS https://tools.veracode.com/veracode-cli/install | sh
+    - veracode package --source out --output verascan --trust
+  artifacts:
+    paths:
+      - verascan/
